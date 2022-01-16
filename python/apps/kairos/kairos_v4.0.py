@@ -192,37 +192,6 @@ def set_people_counting(key_id, people_couting_data):
     set_people_counting_counter(key_id, 0)
 
 
-def set_social_distance(key_id, social_distance_data):
-    global social_distance_list
-
-    if not isinstance(social_distance_data, dict):
-        service.log_error("'social_distance_data' parameter, most be a dictionary")
-
-    if not isinstance(social_distance_data['enabled'], bool):
-        service.log_error("'social_distance_data' parameter, most be True or False")
-
-    if not isinstance(int(float(social_distance_data['tolerated_distance'])), int) and int(float(social_distance_data['tolerated_distance'])) > 3:
-        service.log_error("'social_distance_data.tolarated_distance' parameter, most be and integer bigger than 3 pixels")
-    else:
-        new_value = int(float(social_distance_data['tolerated_distance']))
-        social_distance_data.update({'tolerated_distance': new_value})
-
-    if not isinstance(int(float(social_distance_data['persistence_time'])), int) and int(float(social_distance_data['persistence_time'])) > -1:
-        service.log_error("'social_distance_data.persistence_time' parameter, most be a positive integer/floater")
-    else:
-        new_value = int(float(social_distance_data['persistence_time'])) * 1000
-        social_distance_data.update({'tolerated_distance': new_value})
-
-    #social_distance_data.update({'persistence_time': social_distance_data['persistence_time'] * 1000})
-
-    social_distance_list.update(
-            {
-                key_id: social_distance_data
-            })
-
-    social_distance_list[key_id].update({'social_distance_ids': {}})
-
-
 def get_people_counting(key_id):
     global people_distance_list
 
@@ -394,28 +363,6 @@ def validate_aforo_values(data, srv_id, service_name):
         service.log_error("Incompatible parameters....  reference_line is not needed when having an area_of_interest type fixed")
 
     return data 
-
-
-def validate_socialdist_values(data):
-
-    #print('print1', data, '...', ['enabled', 'tolerated_distance', 'persistence_time'])
-    if not validate_keys('video-socialDistancing', data, ['enabled', 'tolerated_distance', 'persistence_time']):
-        return False
-
-    if not isinstance(data['enabled'], str):
-        service.log_error("'enabled' parameter, most be string: {}".format(data['enabled']))
-    
-    if not isinstance(float(data['tolerated_distance']), float) and float(data['tolerated_distance']) > 0:
-        service.log_error("tolerated_distance element, most be a positive integer")
-    else:
-        data.update({'tolerated_distance': float(data['tolerated_distance'])})
-
-    if not isinstance(float(data['persistence_time']), float)  and float(data['persistence_time']) > 0:
-        service.log_error("persistence_time element, most a be positive integer/floater")
-    else:
-        data.update({'persistence_time': float(data['persistence_time'])})
-
-    return True
 
 
 def validate_people_counting_values(data):
@@ -736,13 +683,6 @@ def tiler_src_pad_buffer_probe(pad, info, u_data):
             py_nvosd_rect_params.border_color.blue = 1.0
             py_nvosd_rect_params.border_color.alpha = 1.0
 
-    if is_social_distance_enabled:
-        persistence_time = social_distance_info['persistence_time']
-        tolerated_distance = social_distance_info['tolerated_distance']
-        max_side_plus_side = tolerated_distance * 1.42
-        detected_ids = social_distance_info['social_distance_ids']
-        #risk_value = nfps * persistence_time # TODO esta valor no se necesitara en al version 3.2
-
     while l_frame is not None:
         try:
             frame_meta = pyds.NvDsFrameMeta.cast(l_frame.data)
@@ -778,13 +718,6 @@ def tiler_src_pad_buffer_probe(pad, info, u_data):
             #x = int(obj_meta.rect_params.width + obj_meta.rect_params.left/2)
             x = int(obj_meta.rect_params.left + obj_meta.rect_params.width/2)
             #print(x)
-
-            if is_social_distance_enabled:
-                # centroide al pie
-                #y = int(obj_meta.rect_params.height + obj_meta.rect_params.top)
-                y = int(obj_meta.rect_params.top + obj_meta.rect_params.height) 
-                #print("x,y",x,"  ",y)
-                ids_and_boxes.update({obj_meta.object_id: (x, y)})
 
             # Service Aforo (in and out)
             if is_aforo_enabled:
@@ -847,17 +780,6 @@ def tiler_src_pad_buffer_probe(pad, info, u_data):
                 else:
                     elements_to_be_delete = [ key for key in last.keys() if key not in ids ]
                     set_disappeared(camera_id, elements_to_be_delete)
-
-        if is_social_distance_enabled:
-            if len(ids_and_boxes) > 1: # if only 1 object is present there is no need to calculate the distance
-                service.social_distance2(get_social_distance_url(), camera_id, ids_and_boxes, tolerated_distance, persistence_time, max_side_plus_side, detected_ids)
-            py_nvosd_text_params.display_text = "SOCIAL DISTANCE Source ID={} Source Number={} Person_count={} ".format(frame_meta.source_id, frame_meta.pad_index , obj_counter[PGIE_CLASS_ID_PERSON])
-
-        if is_people_counting_enabled:
-            if obj_counter[PGIE_CLASS_ID_PERSON] != get_people_counting_counter(camera_id):
-                #print(camera_id, ' anterior, actual:',get_people_counting_counter(camera_id), obj_counter[PGIE_CLASS_ID_PERSON])
-                set_people_counting_counter(camera_id, obj_counter[PGIE_CLASS_ID_PERSON])
-                service.people_counting(camera_id, obj_counter[PGIE_CLASS_ID_PERSON])
 
         #====================== FIN de definicion de valores de mensajes a pantalla
 
